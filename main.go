@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/crva/glock/requester"
 	"github.com/crva/glock/stats"
@@ -50,6 +52,7 @@ func main() {
 	version := flag.Bool("v", false, "Print version information")
 	url := flag.String("u", "", "URL to send the HTTP request to")
 	nbRequestToPerform := flag.Int("n", 1, "Number of requests to send")
+	nbGoroutines := flag.Int("c", 1, "Number of goroutines to use for sending requests")
 	flag.Parse()
 
 	if *version {
@@ -57,16 +60,54 @@ func main() {
 		return
 	}
 
-	var durations []float64
-	var successCount int
-
-	for i := 0; i < *nbRequestToPerform; i++ {
-		duration, err := requester.SendHttpRequest(*url)
-		if err == nil {
-			durations = append(durations, duration.Seconds())
-			successCount++
-		}
+	if *nbGoroutines < 1 || *nbGoroutines > *nbRequestToPerform {
+		fmt.Println("Error: Number of goroutines must be greater than 0 and less than the number of requests to perform.")
+		return
 	}
 
+	var durations []float64
+	var successCount int
+	var requestWg sync.WaitGroup
+	nbRequestToPerformPerGoroutine := *nbRequestToPerform / *nbGoroutines
+	nbRemainingRequests := *nbRequestToPerform % *nbGoroutines
+
+	// Handle all the evenly distributed requests
+	for i := 0; i < *nbGoroutines; i++ {
+		requestWg.Add(1)
+
+		go func() {
+			defer requestWg.Done()
+
+			for j := 0; j < nbRequestToPerformPerGoroutine; j++ {
+				duration, err := requester.SendHttpRequest(*url)
+				if err == nil {
+					successCount++
+				}
+				durations = append(durations, duration.Seconds())
+			}
+		}()
+	}
+
+	// Handle the remaining requests in a separate goroutine
+	if nbRemainingRequests > 0 {
+		requestWg.Add(1)
+		go func() {
+			defer requestWg.Done()
+
+			for j := 0; j < nbRemainingRequests; j++ {
+				duration, err := requester.SendHttpRequest(*url)
+				if err == nil {
+					successCount++
+				}
+				durations = append(durations, duration.Seconds())
+			}
+		}()
+	}
+
+	start := time.Now()
+	requestWg.Wait()
+	totalDuration := time.Since(start).Seconds()
+
 	stats.PrintHttpReport(durations, successCount)
+	stats.PrintTotalDuration(totalDuration)
 }
