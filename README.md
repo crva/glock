@@ -22,8 +22,8 @@
 
 ### ⚙️ Parameterization
 
-- [ ] `-method` flag (GET, POST, etc.)
-- [ ] `-data` flag (JSON request body)
+- [x] `-method` flag (GET, POST, etc.)
+- [x] `-data` flag (JSON request body)
 - [ ] `-headers` flag (multiple HTTP headers)
 - [ ] Input validation (URL format, JSON syntax…)
 
